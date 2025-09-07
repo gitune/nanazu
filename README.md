@@ -11,6 +11,7 @@
 インデックス生成スクリプトはDockerとして動作させると簡単です。
 
 1. Dockerfileのあるディレクトリで、インデックス対象としたい静的コンテンツを `public` ディレクトリの下に置く。また生成されたインデックス格納用の `index` ディレクトリも作っておく
+   - なおインデックス対象としたい静的コンテンツは、URLプレフィックス毎にサブディレクトリを切って配置してください。対象サイトが1つしかないなら `public/www/` 以下に置く、などとしておくと良いです。
 2. `create_index.py` スクリプト冒頭にある「除外したいパスのプレフィックス」や「URLプレフィックスのマッピング」を使いたいサイトに合わせて更新する
 3. `docker build -t nano-indexer .` などとしてdocker imageをbuildする
 4. `docker run --rm -it -v ./public:/app/public -v ./index:/app/index nano-indexer` などとしてインデックスを作成する
