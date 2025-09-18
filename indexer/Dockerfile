@@ -1,15 +1,15 @@
-# Python 3.9をベースイメージとして使用
-FROM python:3.9-slim
+# Stage 1: ビルドステージ
+# MeCab辞書とPythonパッケージのビルド・インストールを行う
+FROM python:3.9-slim AS builder
 
-# 作業ディレクトリを設定
 WORKDIR /app
 
-# ロケールを設定
+# 日本語ロケールを設定し、ビルドに必要なパッケージをインストール
 ENV LANG=C.UTF-8
-ENV MECAB_DIC_DIR=/usr/local/lib/mecab/dic/mecab-ipadic-neologd
+# MeCab辞書をインストールするパスを設定
+ENV MECAB_DIC_PATH=/usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd
 
-# 必要なパッケージをインストール
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     mecab \
     libmecab-dev \
@@ -18,11 +18,12 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     file \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # mecab-ipadic-neologdをインストール
 RUN git clone https://github.com/neologd/mecab-ipadic-neologd.git /tmp/mecab-ipadic-neologd \
-    && /tmp/mecab-ipadic-neologd/bin/install-mecab-ipadic-neologd -n -y -u ${MECAB_DIC_DIR} \
+    && /tmp/mecab-ipadic-neologd/bin/install-mecab-ipadic-neologd -n -y -u ${MECAB_DIC_PATH} \
     && rm -rf /tmp/mecab-ipadic-neologd \
     && ln -s /etc/mecabrc /usr/local/etc/mecabrc
 
@@ -30,8 +31,28 @@ RUN git clone https://github.com/neologd/mecab-ipadic-neologd.git /tmp/mecab-ipa
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# プログラムコードをコンテナにコピー
+# Stage 2: 本番環境用イメージ
+# 必要なファイルのみをコピーしてイメージサイズを削減する
+FROM python:3.9-slim
+
+# 日本語ロケールを設定
+ENV LANG=C.UTF-8
+
+# Stage 1からMeCab辞書をコピー
+ENV MECAB_DIC_PATH=/usr/lib/x86_64-linux-gnu/mecab/dic/mecab-ipadic-neologd
+COPY --from=builder ${MECAB_DIC_PATH} ${MECAB_DIC_PATH}
+
+# Stage 1からmecabrcへのシンボリックリンクをコピー
+COPY --from=builder /usr/local/etc/mecabrc /usr/local/etc/mecabrc
+
+# Stage 1からPythonの依存関係をコピー
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# 作業ディレクトリを設定し、プログラムコードをコピー
+WORKDIR /app
 COPY create_index.py .
+COPY requirements.txt .
 
 # マウントポイント＆ユーザ・グループ作成
 RUN mkdir public index \
